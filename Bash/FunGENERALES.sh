@@ -2,6 +2,9 @@
 
 INTERFAZ="ens37"
 MASCARA="255.255.255.0"
+GENERAL="/var/ftp/publico"
+USUARIOS="/var/ftp/usuarios"
+FTP_ROOT="/var/ftp"
 
 VerificarRoot() {
     if [ "$EUID" -ne 0 ]; then
