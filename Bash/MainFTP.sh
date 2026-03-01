@@ -11,7 +11,8 @@ while true; do
     echo "2.- Verificar Servicio"
     echo "3.- Configurar"
     echo "4.- Crear Usuario"
-    echo "5.- Salir"
+    echo "5.- Cambiar de grupo a usuario"
+    echo "6.- Salir"
     read -p "Selecciona una opción: " opcion
 
     case $opcion in
@@ -22,7 +23,8 @@ while true; do
             CrearEstructuras
             ;;
         4) CrearUsuario ;;
-        5) break ;;
+        5) CambiarGrupoUsuario ;;
+        6) break ;;
         *) echo "Opción inválida" ;;
     esac
     echo ""

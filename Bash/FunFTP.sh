@@ -75,3 +75,23 @@ CrearUsuario(){
         chmod 770 $USUARIOS/$usuario
     done
 }
+
+CambiarGrupoUsuario() {
+
+    read -p "Usuario a cambiar: " usuario
+    read -p "Nuevo grupo (reprobados/recursadores): " nuevoGrupo
+
+    if id "$usuario" &>/dev/null; then
+        usermod -g $n
+        uevoGrupo $usuario
+
+        # Ajustar permisos carpeta personal
+        chown $usuario:$nuevoGrupo $USUARIOS/$usuario
+        chmod 770 $USUARIOS/$usuario
+
+        echo "Grupo cambiado correctamente."
+        echo "Ahora $usuario solo puede acceder a /$nuevoGrupo"
+    else
+        echo "El usuario no existe."
+    fi
+}

@@ -53,5 +53,21 @@ function CrearUsuario{
         icacls $UserFolder /grant "${usuario}:(OI)(CI)M"
         icacls "$FTPPath\$grupo" /grant "${grupo}:(OI)(CI)M"
         icacls $General /grant "IUSR:(OI)(CI)RX"
+    }
 }
+
+function CambiarGrupoUsuario {
+
+    $usuario = Read-Host "Usuario"
+    $nuevoGrupo = Read-Host "Nuevo grupo (reprobados/recursadores)"
+
+    $grupos = @("reprobados","recursadores")
+
+    foreach ($g in $grupos) {
+        Remove-LocalGroupMember -Group $g -Member $usuario -ErrorAction SilentlyContinue
+    }
+
+    Add-LocalGroupMember -Group $nuevoGrupo -Member $usuario
+
+    Write-Host "Grupo actualizado."
 }

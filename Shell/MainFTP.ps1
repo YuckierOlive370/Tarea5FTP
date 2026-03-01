@@ -15,7 +15,8 @@ while ($con -match '^[sS]$') {
     Write-Host "2.-Instalar el servicio"
     Write-Host "3.-Configurar"
     Write-Host "4.-Crear usuario"
-    Write-Host "5.-Salir..."
+    Write-Host "5.-Cambiar de grupo a usuario"
+    Write-Host "6.-Salir..."
     Write-Host "Selecciona: "
     $op = [int](Read-Host)
     switch($op){
@@ -37,7 +38,8 @@ while ($con -match '^[sS]$') {
             AbilitarAutenticacion
         }
         4{CrearUsuario}
-        5{$con = "n"}
+        5{CambiarGrupoUsuario}
+        6{$con = "n"}
         default{Write-Host "Opcion no valida"}
     }
 }
