@@ -23,6 +23,7 @@ function CrearEstructura{
 function CrearSitioFTP{
     if (-not (Test-Path IIS:\Sites\FTPSite)) {
     New-WebFtpSite -Name "FTPSite" -Port 21 -PhysicalPath $FTPPath -Force
+    }
 }
 
 function AbilitarAutenticacion{
