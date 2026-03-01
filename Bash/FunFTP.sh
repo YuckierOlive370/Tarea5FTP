@@ -9,10 +9,17 @@ CrearGrupos(){
     else
         echo "Grupo $grupo ya existe."
     fi
+
+    mkdir -p $FTP_ROOT/$grupo
+    chown root:$grupo $FTP_ROOT/$grupo
+    chmod 770 $FTP_ROOT/$grupo
     done
 }
 
 CrearEstructuras(){
+    mkdir -p $GENERAL
+    mkdir -p $USUARIOS
+
     cat > /etc/vsftpd.conf <<EOF
     listen=YES
     anonymous_enable=YES
@@ -32,6 +39,13 @@ CrearEstructuras(){
     EOF
 
     systemctl restart vsftpd
+    
+    if systemctl is-active --quiet vsftpd; then
+        echo "vsftpd configurado correctamente."
+    else
+        echo "ERROR: vsftpd no inició. Revisa con:"
+        echo "systemctl status vsftpd"
+    fi
 }
 
 CrearUsuario(){
