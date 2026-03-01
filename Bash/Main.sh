@@ -1,6 +1,6 @@
 #!/bin/bash
 source ./FunGENERALES.sh
-./VerificarRoot
+VerificarRoot
 while true; do
     echo "===== Menu de Opciones ====="
     echo "1.- Gestion de DHCP"

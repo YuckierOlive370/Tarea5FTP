@@ -1,4 +1,7 @@
 #!/bin/bash
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 source ./FunGENERALES.sh
 
 CrearGrupos(){
