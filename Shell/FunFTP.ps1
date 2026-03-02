@@ -11,16 +11,41 @@ function CrearGrupos{
 }
 
 function CrearEstructura{
+
     $grupos = @("reprobados","recursadores")
-    
     $FTPPath = "C:\FTP"
     $General = "$FTPPath\general"
 
-    New-Item -ItemType Directory -Force -Path $FTPPath,$General
+    # Crear raíz
+    New-Item -ItemType Directory -Force -Path $FTPPath
+
+    # 🔴 Quitar herencia en raíz
+    icacls $FTPPath /inheritance:r
+
+    # Solo sistema y administradores en raíz
+    icacls $FTPPath /grant "SYSTEM:(OI)(CI)F"
+    icacls $FTPPath /grant "Administrators:(OI)(CI)F"
 
     foreach ($grupo in $grupos) {
-        New-Item -ItemType Directory -Force -Path "$FTPPath\$grupo"
+
+        $RutaGrupo = "$FTPPath\$grupo"
+        New-Item -ItemType Directory -Force -Path $RutaGrupo
+
+        icacls $RutaGrupo /inheritance:r
+        icacls $RutaGrupo /grant "${grupo}:(OI)(CI)M"
+        icacls $RutaGrupo /grant "SYSTEM:(OI)(CI)F"
+        icacls $RutaGrupo /grant "Administrators:(OI)(CI)F"
     }
+
+    # Carpeta general compartida
+    New-Item -ItemType Directory -Force -Path $General
+    icacls $General /inheritance:r
+    icacls $General /grant "reprobados:(OI)(CI)M"
+    icacls $General /grant "recursadores:(OI)(CI)M"
+    icacls $General /grant "SYSTEM:(OI)(CI)F"
+    icacls $General /grant "Administrators:(OI)(CI)F"
+
+    Write-Host "Estructura creada correctamente."
 }
 
 function CrearSitioFTP{
@@ -124,9 +149,10 @@ function CrearUsuario{
         New-Item -ItemType Directory -Force -Path $UserFolder
 
         # Permisos NTFS correctos
+        icacls $UserFolder /inheritance:r
         icacls $UserFolder /grant "${usuario}:(OI)(CI)F"
-        icacls $FTPPath /grant "${grupo}:(OI)(CI)M"
-        icacls $General /grant "${grupo}:(OI)(CI)M"
+        icacls $UserFolder /grant "SYSTEM:(OI)(CI)F"
+        icacls $UserFolder /grant "Administrators:(OI)(CI)F"
 
         Write-Host "Usuario $usuario creado correctamente."
     }
