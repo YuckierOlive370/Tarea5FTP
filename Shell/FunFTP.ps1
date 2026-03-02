@@ -10,6 +10,8 @@ function CrearGrupos{
 }
 
 function CrearEstructura{
+    $grupos = @("reprobados","recursadores")
+    
     $FTPPath = "C:\FTP"
     $General = "$FTPPath\general"
 
