@@ -4,6 +4,10 @@ PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 source ./FunGENERALES.sh
 
+FTP_ROOT="/srv/ftp"
+GENERAL="$FTP_ROOT/general"
+USUARIOS="$FTP_ROOT/usuarios"
+
 CrearGrupos(){
     for grupo in reprobados recursadores; do
         if ! getent group "$grupo" > /dev/null; then
@@ -41,13 +45,8 @@ pam_service_name=vsftpd
 user_sub_token=\$USER
 local_root=$USUARIOS/\$USER
 
-pasv_enable=YES
-pasv_min_port=50000
-pasv_max_port=51000
-pasv_address=192.168.32.2
 EOF
 
-    ufw allow 50000:51000/tcp
     systemctl restart vsftpd
 
     if systemctl is-active --quiet vsftpd; then
