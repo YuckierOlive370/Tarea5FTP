@@ -19,12 +19,15 @@ function CrearEstructura{
     # Crear raíz
     New-Item -ItemType Directory -Force -Path $FTPPath
 
-    # 🔴 Quitar herencia en raíz
+    # Quitar herencia en raíz
     icacls $FTPPath /inheritance:r
 
     # Solo sistema y administradores en raíz
     icacls $FTPPath /grant "SYSTEM:(OI)(CI)F"
     icacls $FTPPath /grant "Administrators:(OI)(CI)F"
+
+    icacls $FTPPath /grant "reprobados:(RX)"
+    icacls $FTPPath /grant "recursadores:(RX)"
 
     foreach ($grupo in $grupos) {
 
