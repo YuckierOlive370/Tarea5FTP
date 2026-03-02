@@ -88,8 +88,8 @@ function ProbarPermisos {
     $servidor = Pedir-IP
     Write-Host "Usuario: "
     $usuario = Read-Host
-    Write-Host "Contraseña: "
-    $password = Read-Host
+    Write-Host "Password: "
+    $password = PedirPassword
 
     "Archivo de prueba" | Out-File prueba.txt
 

@@ -83,7 +83,7 @@ CambiarGrupoUsuario() {
 
     if id "$usuario" &>/dev/null; then
         usermod -g $n
-        uevoGrupo $usuario
+        nuevoGrupo $usuario
 
         # Ajustar permisos carpeta personal
         chown $usuario:$nuevoGrupo $USUARIOS/$usuario
