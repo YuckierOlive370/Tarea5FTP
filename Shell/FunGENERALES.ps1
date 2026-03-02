@@ -1,3 +1,31 @@
+function ValidarPassword {
+    param (
+        [string]$password
+    )
+
+    $regex = '^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,}$'
+
+    if ($password -match $regex) {
+        Write-Host "Password valido"
+        return $true
+    } else {
+        return $false
+    }
+}
+
+function PedirPassword {
+    do {
+        $passPlain = Read-Host
+        if (-not (ValidarPassword $passPlain)) {
+            Write-Host "Password invalido (longitud de mas de 8, utiliza numeros, mayusculas y caracteres especiales)"
+        }
+    } until (ValidarPassword $passPlain)
+
+    $pass = ConvertTo-SecureString $passPlain -AsPlainText -Force
+    return $pass
+}
+
+
 function VerificarRoot {
     $isAdmin = ([Security.Principal.WindowsPrincipal] `
         [Security.Principal.WindowsIdentity]::GetCurrent()

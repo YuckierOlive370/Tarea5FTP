@@ -1,3 +1,4 @@
+. .\FunGENERALES
 function CrearGrupos{
     $grupos = @("reprobados","recursadores")
 
@@ -34,13 +35,19 @@ function AbilitarAutenticacion{
 }
 
 function CrearUsuario{
+    $FTPPath = "C:\FTP"
+    $General = "$FTPPath\general"
+
     $n = Read-Host "¿Cuántos usuarios deseas crear?"
 
     for ($i=1; $i -le $n; $i++) {
 
-        $usuario = Read-Host "Nombre del usuario"
-        $pass = Read-Host "Contraseña" -AsSecureString
-        $grupo = Read-Host "Grupo (reprobados/recursadores)"
+        Write-Host "Nombre del usuario"
+        $usuario = Read-Host
+        Write-Host "Password"
+        $pass = PedirPassword
+        Write-Host "Grupo (reprobados/recursadores)"
+        $grupo = Read-Host
 
         if (-not (Get-LocalUser -Name $usuario -ErrorAction SilentlyContinue)) {
             New-LocalUser -Name $usuario -Password $pass
@@ -59,9 +66,10 @@ function CrearUsuario{
 }
 
 function CambiarGrupoUsuario {
-
-    $usuario = Read-Host "Usuario"
-    $nuevoGrupo = Read-Host "Nuevo grupo (reprobados/recursadores)"
+    Write-Host "Usuario"
+    $usuario = Read-Host
+    Write-Host "Nuevo grupo (reprobados/recursadores)"
+    $nuevoGrupo = Read-Host
 
     $grupos = @("reprobados","recursadores")
 
