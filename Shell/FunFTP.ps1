@@ -24,24 +24,86 @@ function CrearEstructura{
 }
 
 function CrearSitioFTP{
+    Import-Module WebAdministration
     $FTPPath = "C:\FTP"
+
     if (-not (Test-Path IIS:\Sites\FTPSite)) {
-    New-WebFtpSite -Name "FTPSite" -Port 21 -PhysicalPath $FTPPath -Force
+        New-WebFtpSite -Name "FTPSite" -Port 21 -PhysicalPath $FTPPath -Force
+        Write-Host "Sitio FTP creado."
+    } else {
+        Write-Host "El sitio ya existe."
     }
+
+    # Desactivar SSL obligatorio
+    Set-ItemProperty "IIS:\Sites\FTPSite" `
+    -Name ftpServer.security.ssl.controlChannelPolicy `
+    -Value 0
+
+    Set-ItemProperty "IIS:\Sites\FTPSite" `
+    -Name ftpServer.security.ssl.dataChannelPolicy `
+    -Value 0
+
+    Restart-WebItem "IIS:\Sites\FTPSite"
 }
 
-function AbilitarAutenticacion{
+function HabilitarAutenticacion{
     Import-Module WebAdministration
-    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.anonymousAuthentication.enabled -Value 0
-    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.basicAuthentication.enabled -Value 0
-    iisreset
+
+    # Desactivar anónimo
+    Set-ItemProperty IIS:\Sites\FTPSite `
+    -Name ftpServer.security.authentication.anonymousAuthentication.enabled `
+    -Value $false
+
+    # Activar básica
+    Set-ItemProperty IIS:\Sites\FTPSite `
+    -Name ftpServer.security.authentication.basicAuthentication.enabled `
+    -Value $true
+
+    Restart-WebItem "IIS:\Sites\FTPSite"
+}
+
+function ConfigurarAutorizacion {
+
+    Import-Module WebAdministration
+
+    # Limpiar reglas anteriores
+    Clear-WebConfiguration `
+    -Filter "system.ftpServer/security/authorization" `
+    -PSPath "IIS:\" `
+    -Location "FTPSite"
+
+    # Regla para grupo reprobados
+    Add-WebConfigurationProperty `
+    -Filter "system.ftpServer/security/authorization" `
+    -PSPath "IIS:\" `
+    -Location "FTPSite" `
+    -Name "." `
+    -Value @{
+        accessType="Allow";
+        roles="reprobados";
+        permissions="Read,Write"
+    }
+
+    # Regla para grupo recursadores
+    Add-WebConfigurationProperty `
+    -Filter "system.ftpServer/security/authorization" `
+    -PSPath "IIS:\" `
+    -Location "FTPSite" `
+    -Name "." `
+    -Value @{
+        accessType="Allow";
+        roles="recursadores";
+        permissions="Read,Write"
+    }
+
+    Write-Host "Autorización configurada correctamente."
 }
 
 function CrearUsuario{
     $FTPPath = "C:\FTP"
     $General = "$FTPPath\general"
 
-    $n = Read-Host "¿Cuántos usuarios deseas crear?"
+    $n = Read-Host "¿Cuantos usuarios deseas crear?"
 
     for ($i=1; $i -le $n; $i++) {
 
@@ -53,7 +115,7 @@ function CrearUsuario{
         $grupo = Read-Host
 
         if (-not (Get-LocalUser -Name $usuario -ErrorAction SilentlyContinue)) {
-            New-LocalUser -Name $usuario -Password $pass
+            New-LocalUser -Name $usuario -Password $pass -FullName $usuario
         }
 
         Add-LocalGroupMember -Group $grupo -Member $usuario -ErrorAction SilentlyContinue
@@ -61,10 +123,12 @@ function CrearUsuario{
         $UserFolder = "$FTPPath\$usuario"
         New-Item -ItemType Directory -Force -Path $UserFolder
 
-        # Permisos NTFS
-        icacls $UserFolder /grant "${usuario}:(OI)(CI)M"
-        icacls "$FTPPath\$grupo" /grant "${grupo}:(OI)(CI)M"
-        icacls $General /grant "IUSR:(OI)(CI)RX"
+        # Permisos NTFS correctos
+        icacls $UserFolder /grant "${usuario}:(OI)(CI)F"
+        icacls $FTPPath /grant "${grupo}:(OI)(CI)M"
+        icacls $General /grant "${grupo}:(OI)(CI)M"
+
+        Write-Host "Usuario $usuario creado correctamente."
     }
 }
 
@@ -83,4 +147,8 @@ function CambiarGrupoUsuario {
     Add-LocalGroupMember -Group $nuevoGrupo -Member $usuario
 
     Write-Host "Grupo actualizado."
+}
+
+function Puerto {
+    New-NetFirewallRule -DisplayName "FTP Port 21" -Direction Inbound -Protocol TCP -LocalPort 21 -Action Allow
 }

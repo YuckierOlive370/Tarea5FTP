@@ -40,8 +40,14 @@ allow_writeable_chroot=YES
 pam_service_name=vsftpd
 user_sub_token=\$USER
 local_root=$USUARIOS/\$USER
+
+pasv_enable=YES
+pasv_min_port=50000
+pasv_max_port=51000
+pasv_address=192.168.32.2
 EOF
 
+    ufw allow 50000:51000/tcp
     systemctl restart vsftpd
 
     if systemctl is-active --quiet vsftpd; then
