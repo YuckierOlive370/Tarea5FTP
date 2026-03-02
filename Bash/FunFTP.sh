@@ -39,7 +39,6 @@ write_enable=YES
 local_umask=022
 dirmessage_enable=YES
 use_localtime=YES
-chroot_local_user=YES
 allow_writeable_chroot=YES
 pam_service_name=vsftpd
 user_sub_token=\$USER
