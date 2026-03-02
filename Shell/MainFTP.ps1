@@ -31,7 +31,6 @@ while ($con -match '^[sS]$') {
             }
         }
         3{
-            Import-Module WebAdministration
             CrearGrupos
             CrearEstructura
             CrearSitioFTP

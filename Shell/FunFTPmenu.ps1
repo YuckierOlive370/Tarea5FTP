@@ -8,7 +8,8 @@ function ConectarFTP {
     if ($usuario -eq "anonymous") {
         $password = "anonymous"
     } else {
-        $password = Read-Host "Contraseña"
+        Write-Host "Password: "
+        $password = PedirPassword
     }
 
     $comandos = @"
@@ -32,7 +33,7 @@ function SubirArchivo {
     $servidor = Pedir-IP
     Write-Host "Usuario"
     $usuario = Read-Host
-    Write-Host "Contraseña"
+    Write-Host "Password"
     $password = Read-Host
     Write-Host "Archivo local"
     $archivo = Read-Host
@@ -62,8 +63,8 @@ function DescargarArchivo {
     $servidor = Pedir-IP
     Write-Host "Usuario: "
     $usuario = Read-Host
-    Write-Host "Contraseña: "
-    $password = Read-Host
+    Write-Host "Password: "
+    $password = PedirPassword
     Write-Host "Archivo remoto: "
     $archivo = Read-Host
 

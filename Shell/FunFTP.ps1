@@ -24,14 +24,17 @@ function CrearEstructura{
 }
 
 function CrearSitioFTP{
+    $FTPPath = "C:\FTP"
     if (-not (Test-Path IIS:\Sites\FTPSite)) {
     New-WebFtpSite -Name "FTPSite" -Port 21 -PhysicalPath $FTPPath -Force
     }
 }
 
 function AbilitarAutenticacion{
-    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.anonymousAuthentication.enabled -Value $false
-    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.basicAuthentication.enabled -Value $true
+    Import-Module WebAdministration
+    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.anonymousAuthentication.enabled -Value 0
+    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.basicAuthentication.enabled -Value 0
+    iisreset
 }
 
 function CrearUsuario{
