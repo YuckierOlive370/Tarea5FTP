@@ -44,13 +44,17 @@ function CrearEstructura{
 
     # Carpeta general compartida
     New-Item -ItemType Directory -Force -Path $General
-    icacls $General /inheritance:r
+    icacls $General /inheritance:e
+
     icacls $General /grant "reprobados:(OI)(CI)M"
     icacls $General /grant "recursadores:(OI)(CI)M"
+
+# Permitir lectura al usuario anónimo correctamente propagado
+    icacls $General /grant "IUSR:(OI)(CI)RX"
+    icacls $General /grant "IIS_IUSRS:(OI)(CI)RX"
+
     icacls $General /grant "SYSTEM:(OI)(CI)F"
     icacls $General /grant "Administrators:(OI)(CI)F"
-    icacls $General /grant "IUSR:(RX)"
-    Restart-WebItem "IIS:\Sites\FTPSite"
     Write-Host "Estructura creada correctamente."
 }
 
