@@ -28,6 +28,8 @@ function CrearEstructura{
 
     icacls $FTPPath /grant "reprobados:(RX)"
     icacls $FTPPath /grant "recursadores:(RX)"
+    icacls $FTPPath /grant "IUSR:(OI)(CI)(RX)"
+    icacls $FTPPath /grant "IIS_IUSRS:(OI)(CI)(RX)"
 
     foreach ($grupo in $grupos) {
 
@@ -47,7 +49,8 @@ function CrearEstructura{
     icacls $General /grant "recursadores:(OI)(CI)M"
     icacls $General /grant "SYSTEM:(OI)(CI)F"
     icacls $General /grant "Administrators:(OI)(CI)F"
-
+    icacls $General /grant "IUSR:(RX)"
+    Restart-WebItem "IIS:\Sites\FTPSite"
     Write-Host "Estructura creada correctamente."
 }
 
@@ -80,7 +83,7 @@ function HabilitarAutenticacion{
     # Desactivar anónimo
     Set-ItemProperty IIS:\Sites\FTPSite `
     -Name ftpServer.security.authentication.anonymousAuthentication.enabled `
-    -Value $false
+    -Value $true
 
     # Activar básica
     Set-ItemProperty IIS:\Sites\FTPSite `
@@ -124,6 +127,17 @@ function ConfigurarAutorizacion {
         permissions="Read,Write"
     }
 
+    # Regla para acceso anónimo SOLO lectura
+    Add-WebConfigurationProperty `
+    -Filter "system.ftpServer/security/authorization" `
+    -PSPath "IIS:\" `
+    -Location "FTPSite" `
+    -Name "." `
+    -Value @{
+        accessType="Allow";
+        users="?";
+        permissions="Read"
+    }
     Write-Host "Autorización configurada correctamente."
 }
 
@@ -176,6 +190,8 @@ function CambiarGrupoUsuario {
     Add-LocalGroupMember -Group $nuevoGrupo -Member $usuario
 
     Write-Host "Grupo actualizado."
+    #para asegurar el cambio
+    Restart-Service -Name FTPSVC
 }
 
 function Puerto {

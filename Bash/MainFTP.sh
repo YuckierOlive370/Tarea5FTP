@@ -6,7 +6,7 @@ source ./FunGENERALES.sh
 source ./FunFTP.sh
 
 while true; do
-    echo "===== Automatización y Gestión de FTP ====="
+    echo "===== Automatizacion y Gestion de FTP ====="
     echo "1.- Instalar"
     echo "2.- Verificar Servicio"
     echo "3.- Configurar"

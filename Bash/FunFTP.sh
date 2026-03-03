@@ -28,21 +28,29 @@ CrearEstructuras(){
     mkdir -p $GENERAL
     mkdir -p $USUARIOS
 
+    chown root:root $GENERAL
+    chmod 755 $GENERAL   
+
 cat > /etc/vsftpd.conf <<EOF
 listen=YES
 anonymous_enable=YES
 anon_root=$GENERAL
 anon_upload_enable=NO
 anon_mkdir_write_enable=NO
+
 local_enable=YES
 write_enable=YES
 local_umask=022
+
 dirmessage_enable=YES
 use_localtime=YES
 allow_writeable_chroot=YES
+
 pam_service_name=vsftpd
+
 user_sub_token=\$USER
 local_root=$USUARIOS/\$USER
+chroot_local_user=YES
 
 EOF
 
@@ -67,7 +75,7 @@ CrearUsuario(){
         read -p "Grupo (reprobados/recursadores): " grupo
 
         if ! id "$usuario" &>/dev/null; then
-            useradd -m -d $USUARIOS/$usuario -s /bin/bash -g "$grupo" "$usuario"
+            useradd -d $USUARIOS/$usuario -s /bin/bash -g "$grupo" "$usuario"
             echo "$usuario:$pass" | chpasswd
             echo "Usuario $usuario creado."
         else
@@ -76,7 +84,8 @@ CrearUsuario(){
 
         mkdir -p $USUARIOS/$usuario
         chown "$usuario:$grupo" $USUARIOS/$usuario
-        chmod 770 $USUARIOS/$usuario
+        chmod 750 $USUARIOS/$usuario
+
     done
 }
 
@@ -86,15 +95,15 @@ CambiarGrupoUsuario() {
     read -p "Nuevo grupo (reprobados/recursadores): " nuevoGrupo
 
     if id "$usuario" &>/dev/null; then
-        usermod -g $n
-        nuevoGrupo $usuario
 
-        # Ajustar permisos carpeta personal
-        chown $usuario:$nuevoGrupo $USUARIOS/$usuario
-        chmod 770 $USUARIOS/$usuario
+        usermod -g "$nuevoGrupo" "$usuario"
+
+        chown "$usuario:$nuevoGrupo" $USUARIOS/$usuario
+        chmod 750 $USUARIOS/$usuario
 
         echo "Grupo cambiado correctamente."
-        echo "Ahora $usuario solo puede acceder a /$nuevoGrupo"
+        echo "Ahora $usuario pertenece al grupo $nuevoGrupo"
+
     else
         echo "El usuario no existe."
     fi
