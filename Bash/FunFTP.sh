@@ -19,7 +19,7 @@ CrearGrupos(){
 
         mkdir -p $FTP_ROOT/$grupo
         chown root:$grupo $FTP_ROOT/$grupo
-        chmod 770 $FTP_ROOT/$grupo
+        chmod 2770 $FTP_ROOT/$grupo
     done
 }
 
@@ -27,6 +27,8 @@ CrearEstructuras(){
 
     mkdir -p $GENERAL
     mkdir -p $USUARIOS
+
+    groupadd ftpusers 2>/dev/null
 
 cat > /etc/vsftpd.conf <<EOF
 listen=YES
@@ -44,15 +46,25 @@ chroot_local_user=NO
 EOF
 
     chmod 755 $FTP_ROOT
-    chmod 755 $GENERAL
-    chmod 770 $FTP_ROOT/reprobados
-    chmod 770 $FTP_ROOT/recursadores
+    chown root:ftpusers $GENERAL
+    chmod 2755 $GENERAL
+    chmod 2770 $FTP_ROOT/reprobados
+    chmod 2770 $FTP_ROOT/recursadores
+    chown root:reprobados $FTP_ROOT/reprobados
+    chown root:recursadores $FTP_ROOT/recursadores
     chmod 755 $USUARIOS
 
     chown root:reprobados $FTP_ROOT/reprobados
     chown root:recursadores $FTP_ROOT/recursadores
 
     systemctl restart vsftpd
+
+    if systemctl is-active --quiet vsftpd; then
+        echo "vsftpd configurado correctamente."
+    else
+        echo "ERROR: vsftpd no inició"
+    fi
+
 }
 
 CrearUsuario(){
@@ -69,6 +81,7 @@ CrearUsuario(){
         if ! id "$usuario" &>/dev/null; then
             useradd -d $USUARIOS/$usuario -s /bin/bash -g "$grupo" "$usuario"
             echo "$usuario:$pass" | chpasswd
+            usermod -aG ftpusers "$usuario"
             echo "Usuario $usuario creado."
         else
             echo "Usuario ya existe."
