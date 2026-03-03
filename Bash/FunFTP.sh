@@ -38,7 +38,7 @@ anon_upload_enable=NO
 anon_mkdir_write_enable=NO
 local_enable=YES
 write_enable=YES
-local_umask=022
+local_umask=002
 dirmessage_enable=YES
 use_localtime=YES
 pam_service_name=vsftpd
@@ -47,7 +47,7 @@ EOF
 
     chmod 755 $FTP_ROOT
     chown root:ftpusers $GENERAL
-    chmod 2755 $GENERAL
+    chmod 2775 $GENERAL
     chmod 2770 $FTP_ROOT/reprobados
     chmod 2770 $FTP_ROOT/recursadores
     chown root:reprobados $FTP_ROOT/reprobados
