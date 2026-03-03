@@ -28,39 +28,31 @@ CrearEstructuras(){
     mkdir -p $GENERAL
     mkdir -p $USUARIOS
 
-    chown root:root $GENERAL
-    chmod 755 $GENERAL   
-
 cat > /etc/vsftpd.conf <<EOF
 listen=YES
 anonymous_enable=YES
-anon_root=$GENERAL
+anon_root=/srv/ftp
 anon_upload_enable=NO
 anon_mkdir_write_enable=NO
-
 local_enable=YES
 write_enable=YES
 local_umask=022
-
 dirmessage_enable=YES
 use_localtime=YES
-allow_writeable_chroot=YES
-
 pam_service_name=vsftpd
-
-user_sub_token=\$USER
-local_root=$USUARIOS/\$USER
-chroot_local_user=YES
-
+chroot_local_user=NO
 EOF
 
-    systemctl restart vsftpd
+    chmod 755 $FTP_ROOT
+    chmod 755 $GENERAL
+    chmod 770 $FTP_ROOT/reprobados
+    chmod 770 $FTP_ROOT/recursadores
+    chmod 755 $USUARIOS
 
-    if systemctl is-active --quiet vsftpd; then
-        echo "vsftpd configurado correctamente."
-    else
-        echo "ERROR: vsftpd no inició"
-    fi
+    chown root:reprobados $FTP_ROOT/reprobados
+    chown root:recursadores $FTP_ROOT/recursadores
+
+    systemctl restart vsftpd
 }
 
 CrearUsuario(){
@@ -102,7 +94,6 @@ CambiarGrupoUsuario() {
         chmod 750 $USUARIOS/$usuario
 
         echo "Grupo cambiado correctamente."
-        echo "Ahora $usuario pertenece al grupo $nuevoGrupo"
 
     else
         echo "El usuario no existe."
