@@ -37,7 +37,7 @@ CrearGrupos() {
 }
 
 # Configurar vsftpd
-ConfigurarVsftpd() {
+CrearEstructuras() {
 cat > /etc/vsftpd.conf <<EOF
 listen=YES
 anonymous_enable=YES
