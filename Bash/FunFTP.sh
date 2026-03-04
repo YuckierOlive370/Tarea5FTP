@@ -6,7 +6,6 @@ source ./FunGENERALES.sh
 
 FTP_ROOT="/srv/ftp"
 GENERAL="$FTP_ROOT/general"
-HOMES="$FTP_ROOT/homes"
 GRUPOS=("reprobados" "recursadores")
 FTP_USERS_GROUP="ftpusers"
 
@@ -17,10 +16,6 @@ CrearGrupos() {
     mkdir -p $GENERAL
     chown root:$FTP_USERS_GROUP $GENERAL
     chmod 2775 $GENERAL
-
-    mkdir -p $HOMES
-    chown root:root $HOMES
-    chmod 755 $HOMES
 
     for grupo in "${GRUPOS[@]}"; do
         if ! getent group "$grupo" >/dev/null; then
@@ -74,7 +69,8 @@ CrearUsuario() {
         read -p "Grupo (reprobados/recursadores): " grupo
 
         if ! id "$usuario" &>/dev/null; then
-            useradd -d $HOMES/$usuario -s /bin/bash -g "$grupo" "$usuario"
+            # Carpeta personal directamente en la raíz FTP
+            useradd -d $FTP_ROOT/$usuario -s /bin/bash -g "$grupo" "$usuario"
             echo "$usuario:$pass" | chpasswd
             usermod -aG $FTP_USERS_GROUP "$usuario"
             echo "Usuario $usuario creado."
@@ -83,13 +79,9 @@ CrearUsuario() {
         fi
 
         # Carpeta personal
-        mkdir -p $HOMES/$usuario
-        chown "$usuario:$grupo" $HOMES/$usuario
-        chmod 700 $HOMES/$usuario   # solo dueño puede ver
-
-        # Enlaces simbólicos a general y su grupo
-        ln -s $GENERAL $HOMES/$usuario/general
-        ln -s $FTP_ROOT/$grupo $HOMES/$usuario/$grupo
+        mkdir -p $FTP_ROOT/$usuario
+        chown "$usuario:$grupo" $FTP_ROOT/$usuario
+        chmod 700 $FTP_ROOT/$usuario   # solo el dueño puede ver
     done
 }
 
@@ -100,13 +92,8 @@ CambiarGrupoUsuario() {
 
     if id "$usuario" &>/dev/null; then
         usermod -g "$nuevoGrupo" "$usuario"
-        chown "$usuario:$nuevoGrupo" $HOMES/$usuario
-        chmod 700 $HOMES/$usuario
-
-        # Actualizar enlace simbólico a carpeta de grupo
-        rm -f $HOMES/$usuario/$nuevoGrupo
-        ln -s $FTP_ROOT/$nuevoGrupo $HOMES/$usuario/$nuevoGrupo
-
+        chown "$usuario:$nuevoGrupo" $FTP_ROOT/$usuario
+        chmod 700 $FTP_ROOT/$usuario
         echo "Grupo cambiado correctamente."
     else
         echo "El usuario no existe."
