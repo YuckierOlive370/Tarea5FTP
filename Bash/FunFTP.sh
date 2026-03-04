@@ -9,14 +9,19 @@ GENERAL="$FTP_ROOT/general"
 GRUPOS=("reprobados" "recursadores")
 FTP_USERS_GROUP="ftpusers"
 
+# ============================
 # Crear carpetas principales y grupos
+# ============================
 CrearGrupos() {
+    # Crear grupo ftpusers
     groupadd $FTP_USERS_GROUP 2>/dev/null
 
+    # General
     mkdir -p $GENERAL
     chown root:$FTP_USERS_GROUP $GENERAL
-    chmod 2775 $GENERAL
+    chmod 2775 $GENERAL   # lectura para todos, escritura para grupo
 
+    # Carpetas de grupo
     for grupo in "${GRUPOS[@]}"; do
         if ! getent group "$grupo" >/dev/null; then
             groupadd "$grupo"
@@ -31,7 +36,9 @@ CrearGrupos() {
     done
 }
 
+# ============================
 # Configurar vsftpd
+# ============================
 CrearEstructuras() {
 cat > /etc/vsftpd.conf <<EOF
 listen=YES
@@ -45,8 +52,7 @@ local_umask=002
 dirmessage_enable=YES
 use_localtime=YES
 pam_service_name=vsftpd
-chroot_local_user=YES
-allow_writeable_chroot=YES
+chroot_local_user=NO
 EOF
 
     systemctl restart vsftpd
@@ -58,7 +64,9 @@ EOF
     fi
 }
 
+# ============================
 # Crear usuarios
+# ============================
 CrearUsuario() {
     read -p "¿Cuántos usuarios deseas crear? " n
 
@@ -69,7 +77,7 @@ CrearUsuario() {
         read -p "Grupo (reprobados/recursadores): " grupo
 
         if ! id "$usuario" &>/dev/null; then
-            # Carpeta personal directamente en la raíz FTP
+            # Carpeta personal en la raíz FTP
             useradd -d $FTP_ROOT/$usuario -s /bin/bash -g "$grupo" "$usuario"
             echo "$usuario:$pass" | chpasswd
             usermod -aG $FTP_USERS_GROUP "$usuario"
@@ -85,7 +93,9 @@ CrearUsuario() {
     done
 }
 
-# Cambiar grupo
+# ============================
+# Cambiar grupo de usuario
+# ============================
 CambiarGrupoUsuario() {
     read -p "Usuario a cambiar: " usuario
     read -p "Nuevo grupo (reprobados/recursadores): " nuevoGrupo
