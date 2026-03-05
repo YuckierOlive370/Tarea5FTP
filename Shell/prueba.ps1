@@ -1,7 +1,6 @@
 . .\FunGENERALES
 function CrearGrupos {
     $grupos = @("reprobados","recursadores")
-
     foreach ($grupo in $grupos) {
         if (-not (Get-LocalGroup -Name $grupo -ErrorAction SilentlyContinue)) {
             New-LocalGroup $grupo
@@ -11,69 +10,81 @@ function CrearGrupos {
 }
 
 function CrearEstructura {
-
-    $FTPPath   = "C:\FTP"
+    $FTPPath = "C:\FTP"
     $LocalUser = "$FTPPath\LocalUser"
-    $Public    = "$LocalUser\Public"
-    $General   = "$Public\general"
-    $grupos    = @("reprobados","recursadores")
+    $grupos = @("reprobados", "recursadores")
 
-    # Crear carpetas base
-    New-Item -ItemType Directory -Force -Path $General | Out-Null
-
+    # 1. Crear carpetas FÍSICAS reales fuera de LocalUser
+    New-Item -ItemType Directory -Force -Path "$FTPPath\publica" | Out-Null
     foreach ($grupo in $grupos) {
-        New-Item -ItemType Directory -Force -Path "$LocalUser\$grupo" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$FTPPath\$grupo" | Out-Null
     }
+    New-Item -ItemType Directory -Force -Path $LocalUser | Out-Null
 
-    # Resetear permisos COMPLETAMENTE
+    # 2. Resetear y asegurar C:\FTP
     icacls $FTPPath /reset /T /C
-
-    # Permisos raíz
     icacls $FTPPath /inheritance:r
     icacls $FTPPath /grant "SYSTEM:(OI)(CI)F"
     icacls $FTPPath /grant "Administrators:(OI)(CI)F"
-    icacls $FTPPath /grant "IIS_IUSRS:(OI)(CI)RX"
+    icacls $FTPPath /grant "IIS_IUSRS:(RX)" # Permiso para que el servicio explore la raíz
 
-    # Permitir atravesar LocalUser
-    icacls $LocalUser /grant "IIS_IUSRS:(OI)(CI)RX"
+    # 3. Permisos Carpeta PUBLICA (Anónimo: R, Usuarios: RW)
+    icacls "$FTPPath\publica" /grant "IUSR:(OI)(CI)RX"
+    icacls "$FTPPath\publica" /grant "Users:(OI)(CI)M"
 
-    # Permisos carpeta Public (anónimo)
-    icacls $Public /grant "IUSR:(OI)(CI)RX"
-    icacls $General /grant "IUSR:(OI)(CI)RX"
-
-    # Permisos carpetas de grupo
+    # 4. Permisos Carpetas de GRUPO
     foreach ($grupo in $grupos) {
-
-        $RutaGrupo = "$LocalUser\$grupo"
-
-        icacls $RutaGrupo /inheritance:r
-        icacls $RutaGrupo /grant "${grupo}:(OI)(CI)M"
-        icacls $RutaGrupo /grant "SYSTEM:(OI)(CI)F"
-        icacls $RutaGrupo /grant "Administrators:(OI)(CI)F"
-        icacls $RutaGrupo /grant "IIS_IUSRS:(OI)(CI)RX"
+        $RutaG = "$FTPPath\$grupo"
+        icacls $RutaG /inheritance:r
+        icacls $RutaG /grant "${grupo}:(OI)(CI)M"
+        icacls $RutaG /grant "SYSTEM:(OI)(CI)F"
+        icacls $RutaG /grant "Administrators:(OI)(CI)F"
     }
 
-    Write-Host "Estructura y permisos configurados correctamente."
+    # 5. FIX ANÓNIMO: IIS busca 'public' (Modo 3)
+    $jAnon = "$LocalUser\public"
+    if (-not (Test-Path $jAnon)) {
+        cmd /c "mklink /J `"$jAnon`" `"$FTPPath\publica`"" | Out-Null
+    }
+    icacls "$LocalUser\public" /grant "IUSR:(OI)(CI)RX"
+
+    Write-Host "Estructura raíz y acceso anónimo (public) configurados." -ForegroundColor Green
 }
 
-function CrearSitioFTP {
+function Construir-Jaula-Usuario {
+    param([string]$usuario, [string]$grupo)
 
-    Import-Module WebAdministration
     $FTPPath = "C:\FTP"
+    $HomeUsuario = "$FTPPath\LocalUser\$usuario"
+    $CarpetaPrivada = "$HomeUsuario\$usuario"
 
-    if (-not (Get-Item IIS:\Sites\FTPSite -ErrorAction SilentlyContinue)) {
-        New-WebFtpSite -Name "FTPSite" -Port 21 -PhysicalPath $FTPPath -Force
-        Write-Host "Sitio FTP creado."
+    # 1. Crear la 'Jaula' (Home) y la subcarpeta personal
+    New-Item -ItemType Directory -Force -Path $CarpetaPrivada | Out-Null
+
+    # 2. Permisos NTFS:
+    icacls $HomeUsuario /inheritance:r
+    icacls $HomeUsuario /grant "SYSTEM:(OI)(CI)F"
+    icacls $HomeUsuario /grant "Administrators:(OI)(CI)F"
+    
+    # --- EL CAMBIO CRÍTICO AQUÍ ---
+    icacls $HomeUsuario /grant "IIS_IUSRS:(RX)"        # Permiso para el SERVICIO
+    icacls $HomeUsuario /grant "${usuario}:(RX)"       # Permiso para que el USUARIO vea los enlaces
+    
+    # Control total sobre su propia carpeta interna física
+    icacls $CarpetaPrivada /grant "${usuario}:(OI)(CI)F"
+
+    # 3. Crear Junctions (Enlaces)
+    $jPublica = "$HomeUsuario\publica"
+    $jGrupo   = "$HomeUsuario\$grupo"
+
+    if (-not (Test-Path $jPublica)) {
+        cmd /c "mklink /J `"$jPublica`" `"$FTPPath\publica`"" | Out-Null
+    }
+    if (-not (Test-Path $jGrupo)) {
+        cmd /c "mklink /J `"$jGrupo`" `"$FTPPath\$grupo`"" | Out-Null
     }
 
-    # User Isolation modo 3
-    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.userIsolation.mode" -Value 3
-
-    # SSL opcional
-    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.security.ssl.controlChannelPolicy" -Value "SslAllow"
-    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.security.ssl.dataChannelPolicy" -Value "SslAllow"
-
-    Restart-WebItem "IIS:\Sites\FTPSite"
+    Write-Host "Jaula corregida para $usuario. Ahora el servicio FTP puede entrar." -ForegroundColor Green
 }
 
 function HabilitarAutenticacion {
@@ -111,73 +122,46 @@ function ConfigurarAutorizacion {
     Write-Host "Autorización configurada."
 }
 
-function Construir-Jaula-Usuario {
-
-    param(
-        [string]$usuario,
-        [string]$grupo
-    )
-
+function CrearSitioFTP {
+    Import-Module WebAdministration
     $FTPPath = "C:\FTP"
-    $jaula   = "$FTPPath\LocalUser\$usuario"
-    $LocalUser = "$FTPPath\LocalUser"
 
-    # Crear home
-    New-Item -ItemType Directory -Force -Path "$jaula\personal" | Out-Null
-
-    # Permisos usuario
-    icacls $jaula /inheritance:r
-    icacls $jaula /grant "${usuario}:(OI)(CI)F"
-    icacls $jaula /grant "SYSTEM:(OI)(CI)F"
-    icacls $jaula /grant "Administrators:(OI)(CI)F"
-    icacls $jaula /grant "IIS_IUSRS:(OI)(CI)RX"
-
-    # Junction general
-    $jGeneral = "$jaula\general"
-    if (-not (Test-Path $jGeneral)) {
-        cmd /c "mklink /J `"$jGeneral`" `"$LocalUser\Public\general`"" | Out-Null
+    if (-not (Get-Item IIS:\Sites\FTPSite -ErrorAction SilentlyContinue)) {
+        New-WebFtpSite -Name "FTPSite" -Port 21 -PhysicalPath $FTPPath -Force
     }
 
-    # Junction grupo
-    $jGrupo = "$jaula\$grupo"
-    if (-not (Test-Path $jGrupo)) {
-        cmd /c "mklink /J `"$jGrupo`" `"$LocalUser\$grupo`"" | Out-Null
-    }
+    # User Isolation modo 3 (User name directory)
+    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.userIsolation.mode" -Value 3
 
-    Write-Host "Jaula creada para $usuario."
+    # SSL opcional (0 = SslAllow)
+    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.security.ssl.controlChannelPolicy" -Value 0
+    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.security.ssl.dataChannelPolicy" -Value 0
+
+    Restart-WebItem "IIS:\Sites\FTPSite"
 }
 
 function CrearUsuario {
-
     $n = Read-Host "¿Cuántos usuarios deseas crear?"
-
     for ($i=1; $i -le $n; $i++) {
-
         $usuario = Read-Host "Nombre del usuario"
-        $pass    = Read-Host "Contraseña" -AsSecureString
+        $pass    = PedirPassword  # Asegúrate que esta función esté en FunGENERALES
         $grupo   = Read-Host "Grupo (reprobados/recursadores)"
 
         if (-not (Get-LocalUser -Name $usuario -ErrorAction SilentlyContinue)) {
-            New-LocalUser -Name $usuario `
-            -Password $pass `
-            -PasswordNeverExpires `
-            -UserMayNotChangePassword `
-            -AccountNeverExpires `
-            -PasswordRequired $true
+            New-LocalUser -Name $usuario -Password $pass -PasswordNeverExpires -UserMayNotChangePassword
         }
 
+        # Limpiar grupos anteriores
         foreach ($g in @("reprobados","recursadores")) {
             Remove-LocalGroupMember -Group $g -Member $usuario -ErrorAction SilentlyContinue
         }
-
         Add-LocalGroupMember -Group $grupo -Member $usuario
 
+        # Construir la jaula
         Construir-Jaula-Usuario -usuario $usuario -grupo $grupo
-
-        Write-Host "Usuario $usuario configurado correctamente."
     }
-
     Restart-Service FTPSVC
+    Write-Host "Proceso finalizado. Servicio reiniciado." -ForegroundColor Yellow
 }
 
 function Puerto {
