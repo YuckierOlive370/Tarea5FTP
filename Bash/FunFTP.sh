@@ -1,92 +1,50 @@
 #!/bin/bash
 
-PATH=/usr/sbin:/usr/bin:/sbin:/bin
-export PATH
-
 FTP_ROOT="/srv/ftp"
-LOCALUSER="$FTP_ROOT/LocalUser"
+LOCAL_USER="$FTP_ROOT/LocalUser"
 PUBLICA="$FTP_ROOT/publica"
 
 GRUPOS=("reprobados" "recursadores")
 
-########################################
-
-check_root(){
-
-if [ "$EUID" -ne 0 ]; then
- echo "Ejecuta como root"
- exit
-fi
-
-}
-
-########################################
-# INSTALAR FTP
-########################################
-
-instalar_ftp(){
+InstalarFTP(){
 
 apt update
-apt install -y vsftpd acl
+apt install vsftpd acl -y
 
-crear_grupos
-crear_estructura
-configurar_vsftpd
-configurar_acl
+mkdir -p $FTP_ROOT
+mkdir -p $LOCAL_USER
+mkdir -p $PUBLICA
 
-systemctl enable vsftpd
+chmod 755 $FTP_ROOT
+chmod 755 $LOCAL_USER
+chmod 777 $PUBLICA
+
+CrearGrupos
+ConfigurarVSFTPD
+
 systemctl restart vsftpd
 
-echo "FTP instalado correctamente"
-
+echo "Servidor FTP instalado"
 read
-
 }
 
-########################################
-# GRUPOS
-########################################
-
-crear_grupos(){
+CrearGrupos(){
 
 for g in "${GRUPOS[@]}"
 do
 groupadd $g 2>/dev/null
-done
 
-}
-
-########################################
-# ESTRUCTURA
-########################################
-
-crear_estructura(){
-
-mkdir -p $LOCALUSER
-mkdir -p $PUBLICA
-
-chmod 755 $FTP_ROOT
-
-for g in "${GRUPOS[@]}"
-do
 mkdir -p $FTP_ROOT/$g
+chown root:$g $FTP_ROOT/$g
 chmod 770 $FTP_ROOT/$g
+
 done
-
-chmod 777 $PUBLICA
-
 }
 
-########################################
-# CONFIGURAR VSFTPD
-########################################
-
-configurar_vsftpd(){
+ConfigurarVSFTPD(){
 
 cat > /etc/vsftpd.conf <<EOF
-
 listen=YES
-listen_ipv6=NO
 
 anonymous_enable=YES
 anon_root=$PUBLICA
@@ -95,170 +53,94 @@ anon_upload_enable=NO
 local_enable=YES
 write_enable=YES
 
+local_umask=002
+
 chroot_local_user=YES
 allow_writeable_chroot=YES
 
-local_root=$LOCALUSER/\$USER
+user_sub_token=\$USER
+local_root=$LOCAL_USER/\$USER
 
 pasv_enable=YES
-pasv_min_port=30000
-pasv_max_port=31000
+pasv_min_port=40000
+pasv_max_port=40100
 
 xferlog_enable=YES
-
 EOF
 
 }
 
-########################################
-# ACL
-########################################
+CrearUsuario(){
 
-configurar_acl(){
-
-setfacl -d -m g:reprobados:rwx $FTP_ROOT/reprobados
-setfacl -d -m g:recursadores:rwx $FTP_ROOT/recursadores
-
-}
-
-########################################
-# CREAR USUARIO
-########################################
-
-crear_usuario(){
-
-read -p "Usuario: " user
-
-if id "$user" &>/dev/null; then
-echo "Usuario ya existe"
-sleep 2
-return
-fi
+read -p "Usuario: " usuario
 
 echo "Selecciona grupo"
 echo "1) reprobados"
 echo "2) recursadores"
-
 read g
 
-if [ "$g" = "1" ]; then
+if [ "$g" == "1" ]; then
 grupo="reprobados"
 else
 grupo="recursadores"
 fi
 
-useradd -m -s /usr/sbin/nologin -g "$grupo" "$user"
+useradd -m -d $LOCAL_USER/$usuario -s /usr/sbin/nologin -g $grupo $usuario
+passwd $usuario
 
-passwd "$user"
+mkdir -p $LOCAL_USER/$usuario/$usuario
+mkdir -p $LOCAL_USER/$usuario/$grupo
+mkdir -p $LOCAL_USER/$usuario/publica
 
-mkdir -p $LOCALUSER/$user
+chmod 755 $LOCAL_USER/$usuario
 
-mkdir $LOCALUSER/$user/$user
-mkdir $LOCALUSER/$user/$grupo
-mkdir $LOCALUSER/$user/publica
+chown $usuario:$grupo $LOCAL_USER/$usuario/$usuario
+chmod 700 $LOCAL_USER/$usuario/$usuario
 
-chown root:root $LOCALUSER/$user
-chmod 755 $LOCALUSER/$user
+setfacl -m g:$grupo:rwx $LOCAL_USER/$usuario/$grupo
+setfacl -m u:$usuario:rwx $LOCAL_USER/$usuario/$grupo
 
-chown $user:$grupo $LOCALUSER/$user/$user
-chmod 700 $LOCALUSER/$user/$user
+setfacl -m u:$usuario:rwx $LOCAL_USER/$usuario/publica
+setfacl -m g:$grupo:rwx $LOCAL_USER/$usuario/publica
 
-crear_bind_mount "$user" "$grupo"
+mount --bind $FTP_ROOT/$grupo $LOCAL_USER/$usuario/$grupo
+mount --bind $PUBLICA $LOCAL_USER/$usuario/publica
 
-systemctl restart vsftpd
-
+echo ""
 echo "Usuario creado correctamente"
-
 read
-
 }
 
-########################################
-# BIND MOUNT
-########################################
+EliminarUsuario(){
 
-crear_bind_mount(){
+read -p "Usuario a eliminar: " usuario
 
-user=$1
-grupo=$2
+userdel -r $usuario
 
-mount --bind $FTP_ROOT/$grupo $LOCALUSER/$user/$grupo
-mount --bind $PUBLICA $LOCALUSER/$user/publica
-
-if ! grep -q "$LOCALUSER/$user/$grupo" /etc/fstab
-then
-echo "$FTP_ROOT/$grupo $LOCALUSER/$user/$grupo none bind 0 0" >> /etc/fstab
-fi
-
-if ! grep -q "$LOCALUSER/$user/publica" /etc/fstab
-then
-echo "$PUBLICA $LOCALUSER/$user/publica none bind 0 0" >> /etc/fstab
-fi
-
-}
-
-########################################
-# ELIMINAR USUARIO
-########################################
-
-eliminar_usuario(){
-
-read -p "Usuario: " user
-
-if ! id "$user" &>/dev/null; then
-echo "Usuario no existe"
-sleep 2
-return
-fi
-
-umount $LOCALUSER/$user/publica 2>/dev/null
-umount $LOCALUSER/$user/reprobados 2>/dev/null
-umount $LOCALUSER/$user/recursadores 2>/dev/null
-
-sed -i "/$LOCALUSER\/$user/d" /etc/fstab
-
-userdel "$user"
-
-rm -rf $LOCALUSER/$user
-
-systemctl restart vsftpd
+rm -rf $LOCAL_USER/$usuario
 
 echo "Usuario eliminado"
-
 read
-
 }
 
-########################################
-# LISTAR
-########################################
+ListarUsuarios(){
 
-listar_usuarios(){
-
-ls $LOCALUSER
+ls $LOCAL_USER
 
 read
-
 }
 
-########################################
-# SERVICIO
-########################################
-
-estado_servicio(){
+EstadoServicio(){
 
 systemctl status vsftpd
 
 read
-
 }
 
-reiniciar_servicio(){
+ReiniciarServicio(){
 
 systemctl restart vsftpd
 
 echo "Servicio reiniciado"
-
-sleep 2
-
+read
 }

@@ -1,4 +1,8 @@
-. .\FunGENERALES
+. .\FunGENERALES.ps1  # Asegúrate que PedirPassword y funciones generales estén disponibles
+
+# =====================================
+# 1. Crear grupos
+# =====================================
 function CrearGrupos {
     $grupos = @("reprobados","recursadores")
     foreach ($grupo in $grupos) {
@@ -9,48 +13,51 @@ function CrearGrupos {
     }
 }
 
+# =====================================
+# 2. Crear estructura raíz y carpetas físicas
+# =====================================
 function CrearEstructura {
     $FTPPath = "C:\FTP"
     $LocalUser = "$FTPPath\LocalUser"
     $grupos = @("reprobados", "recursadores")
 
-    # 1. Crear carpetas FÍSICAS reales fuera de LocalUser
+    # Carpetas físicas
     New-Item -ItemType Directory -Force -Path "$FTPPath\publica" | Out-Null
     foreach ($grupo in $grupos) {
         New-Item -ItemType Directory -Force -Path "$FTPPath\$grupo" | Out-Null
     }
     New-Item -ItemType Directory -Force -Path $LocalUser | Out-Null
 
-    # 2. Resetear y asegurar C:\FTP
+    # Reset y permisos raíz
     icacls $FTPPath /reset /T /C
     icacls $FTPPath /inheritance:r
     icacls $FTPPath /grant "SYSTEM:(OI)(CI)F"
     icacls $FTPPath /grant "Administrators:(OI)(CI)F"
-    icacls $FTPPath /grant "IIS_IUSRS:(RX)" # Permiso para que el servicio explore la raíz
+    icacls $FTPPath /grant "IIS_IUSRS:(RX)"
 
-    # 3. Permisos Carpeta PUBLICA (Anónimo: R, Usuarios: RW)
-    icacls "$FTPPath\publica" /grant "IUSR:(OI)(CI)RX"
-    icacls "$FTPPath\publica" /grant "Users:(OI)(CI)M"
-
-    # 4. Permisos Carpetas de GRUPO
-    foreach ($grupo in $grupos) {
-        $RutaG = "$FTPPath\$grupo"
+    # Carpetas físicas de grupo
+    foreach ($g in $grupos) {
+        $RutaG = "$FTPPath\$g"
         icacls $RutaG /inheritance:r
-        icacls $RutaG /grant "${grupo}:(OI)(CI)M"
         icacls $RutaG /grant "SYSTEM:(OI)(CI)F"
         icacls $RutaG /grant "Administrators:(OI)(CI)F"
+        icacls $RutaG /grant "$g:(OI)(CI)M"  # RW para miembros del grupo
     }
 
-    # 5. FIX ANÓNIMO: IIS busca 'public' (Modo 3)
-    $jAnon = "$LocalUser\public"
-    if (-not (Test-Path $jAnon)) {
-        cmd /c "mklink /J `"$jAnon`" `"$FTPPath\publica`"" | Out-Null
-    }
-    icacls "$LocalUser\public" /grant "IUSR:(OI)(CI)RX"
+    # Carpeta pública
+    $RutaPublica = "$FTPPath\publica"
+    icacls $RutaPublica /inheritance:r
+    icacls $RutaPublica /grant "SYSTEM:(OI)(CI)F"
+    icacls $RutaPublica /grant "Administrators:(OI)(CI)F"
+    icacls $RutaPublica /grant "Users:(OI)(CI)M"   # Todos usuarios RW
+    icacls $RutaPublica /grant "IUSR:(OI)(CI)RX"   # Anonimo solo lectura
 
-    Write-Host "Estructura raíz y acceso anónimo (public) configurados." -ForegroundColor Green
+    Write-Host "Estructura raíz y permisos configurados." -ForegroundColor Green
 }
 
+# =====================================
+# 3. Construir Jaula por usuario
+# =====================================
 function Construir-Jaula-Usuario {
     param([string]$usuario, [string]$grupo)
 
@@ -58,93 +65,43 @@ function Construir-Jaula-Usuario {
     $HomeUsuario = "$FTPPath\LocalUser\$usuario"
     $CarpetaPrivada = "$HomeUsuario\$usuario"
 
-    # 1. Crear la 'Jaula' (Home) y la subcarpeta personal
+    # Crear directorios
+    New-Item -ItemType Directory -Force -Path $HomeUsuario | Out-Null
     New-Item -ItemType Directory -Force -Path $CarpetaPrivada | Out-Null
 
-    # 2. Permisos NTFS:
+    # Reset y permisos de home
     icacls $HomeUsuario /inheritance:r
     icacls $HomeUsuario /grant "SYSTEM:(OI)(CI)F"
     icacls $HomeUsuario /grant "Administrators:(OI)(CI)F"
-    
-    # --- EL CAMBIO CRÍTICO AQUÍ ---
-    icacls $HomeUsuario /grant "IIS_IUSRS:(RX)"        # Permiso para el SERVICIO
-    icacls $HomeUsuario /grant "${usuario}:(RX)"       # Permiso para que el USUARIO vea los enlaces
-    
-    # Control total sobre su propia carpeta interna física
+    icacls $HomeUsuario /grant "IIS_IUSRS:(RX)"      # Servicio FTP puede entrar
+    icacls $HomeUsuario /grant "${usuario}:(RX)"     # Usuario puede ver enlaces
+
+    # Carpeta privada = solo el usuario RW
     icacls $CarpetaPrivada /grant "${usuario}:(OI)(CI)F"
 
-    # 3. Crear Junctions (Enlaces)
+    # Crear junction a carpeta pública
     $jPublica = "$HomeUsuario\publica"
-    $jGrupo   = "$HomeUsuario\$grupo"
-
     if (-not (Test-Path $jPublica)) {
         cmd /c "mklink /J `"$jPublica`" `"$FTPPath\publica`"" | Out-Null
     }
+
+    # Crear junction a carpeta de grupo
+    $jGrupo = "$HomeUsuario\$grupo"
     if (-not (Test-Path $jGrupo)) {
         cmd /c "mklink /J `"$jGrupo`" `"$FTPPath\$grupo`"" | Out-Null
     }
 
-    Write-Host "Jaula corregida para $usuario. Ahora el servicio FTP puede entrar." -ForegroundColor Green
+    Write-Host "Jaula correcta creada para $usuario" -ForegroundColor Green
 }
 
-function HabilitarAutenticacion {
-
-    Import-Module WebAdministration
-
-    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.anonymousAuthentication.enabled -Value $true
-    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.basicAuthentication.enabled -Value $true
-
-    Restart-WebItem "IIS:\Sites\FTPSite"
-}
-
-function ConfigurarAutorizacion {
-
-    Import-Module WebAdministration
-
-    Clear-WebConfiguration -Filter "system.ftpServer/security/authorization" -PSPath "IIS:\" -Location "FTPSite"
-
-    foreach ($grupo in @("reprobados","recursadores")) {
-        Add-WebConfigurationProperty `
-        -Filter "system.ftpServer/security/authorization" `
-        -PSPath "IIS:\" `
-        -Location "FTPSite" `
-        -Name "." `
-        -Value @{ accessType="Allow"; roles=$grupo; permissions="Read,Write" }
-    }
-
-    Add-WebConfigurationProperty `
-    -Filter "system.ftpServer/security/authorization" `
-    -PSPath "IIS:\" `
-    -Location "FTPSite" `
-    -Name "." `
-    -Value @{ accessType="Allow"; users="?"; permissions="Read" }
-
-    Write-Host "Autorización configurada."
-}
-
-function CrearSitioFTP {
-    Import-Module WebAdministration
-    $FTPPath = "C:\FTP"
-
-    if (-not (Get-Item IIS:\Sites\FTPSite -ErrorAction SilentlyContinue)) {
-        New-WebFtpSite -Name "FTPSite" -Port 21 -PhysicalPath $FTPPath -Force
-    }
-
-    # User Isolation modo 3 (User name directory)
-    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.userIsolation.mode" -Value 3
-
-    # SSL opcional (0 = SslAllow)
-    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.security.ssl.controlChannelPolicy" -Value 0
-    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.security.ssl.dataChannelPolicy" -Value 0
-
-    Restart-WebItem "IIS:\Sites\FTPSite"
-}
-
+# =====================================
+# 4. Crear usuario
+# =====================================
 function CrearUsuario {
     $n = Read-Host "¿Cuántos usuarios deseas crear?"
     for ($i=1; $i -le $n; $i++) {
         $usuario = Read-Host "Nombre del usuario"
-        $pass    = PedirPassword  # Asegúrate que esta función esté en FunGENERALES
+        $pass    = PedirPassword
         $grupo   = Read-Host "Grupo (reprobados/recursadores)"
 
         if (-not (Get-LocalUser -Name $usuario -ErrorAction SilentlyContinue)) {
@@ -157,13 +114,64 @@ function CrearUsuario {
         }
         Add-LocalGroupMember -Group $grupo -Member $usuario
 
-        # Construir la jaula
+        # Construir jaula
         Construir-Jaula-Usuario -usuario $usuario -grupo $grupo
     }
+
     Restart-Service FTPSVC
-    Write-Host "Proceso finalizado. Servicio reiniciado." -ForegroundColor Yellow
+    Write-Host "Usuarios creados y servicio FTP reiniciado." -ForegroundColor Yellow
 }
 
+# =====================================
+# 5. Configurar IIS FTP
+# =====================================
+function CrearSitioFTP {
+    Import-Module WebAdministration
+    $FTPPath = "C:\FTP"
+
+    if (-not (Get-Item IIS:\Sites\FTPSite -ErrorAction SilentlyContinue)) {
+        New-WebFtpSite -Name "FTPSite" -Port 21 -PhysicalPath $FTPPath -Force
+    }
+
+    # User Isolation modo 3
+    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.userIsolation.mode" -Value 3
+
+    # SSL opcional (0 = SslAllow)
+    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.security.ssl.controlChannelPolicy" -Value 0
+    Set-ItemProperty "IIS:\Sites\FTPSite" -Name "ftpServer.security.ssl.dataChannelPolicy" -Value 0
+
+    Restart-WebItem "IIS:\Sites\FTPSite"
+}
+
+function HabilitarAutenticacion {
+    Import-Module WebAdministration
+    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.anonymousAuthentication.enabled -Value $true
+    Set-ItemProperty IIS:\Sites\FTPSite -Name ftpServer.security.authentication.basicAuthentication.enabled -Value $true
+    Restart-WebItem "IIS:\Sites\FTPSite"
+}
+
+function ConfigurarAutorizacion {
+    Import-Module WebAdministration
+
+    Clear-WebConfiguration -Filter "system.ftpServer/security/authorization" -PSPath "IIS:\" -Location "FTPSite"
+
+    foreach ($grupo in @("reprobados","recursadores")) {
+        Add-WebConfigurationProperty -Filter "system.ftpServer/security/authorization" `
+            -PSPath "IIS:\" -Location "FTPSite" `
+            -Name "." -Value @{ accessType="Allow"; roles=$grupo; permissions="Read,Write" }
+    }
+
+    # Anonimo solo lectura
+    Add-WebConfigurationProperty -Filter "system.ftpServer/security/authorization" `
+        -PSPath "IIS:\" -Location "FTPSite" `
+        -Name "." -Value @{ accessType="Allow"; users="?"; permissions="Read" }
+
+    Write-Host "Autorización FTP configurada." -ForegroundColor Green
+}
+
+# =====================================
+# 6. Abrir puerto FTP
+# =====================================
 function Puerto {
     New-NetFirewallRule -DisplayName "FTP Port 21" -Direction Inbound -Protocol TCP -LocalPort 21 -Action Allow
 }
