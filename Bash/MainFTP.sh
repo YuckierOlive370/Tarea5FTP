@@ -1,35 +1,31 @@
 #!/bin/bash
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
 
+source ./FunGENERALES.sh
 source ./FunFTP.sh
 
-while true
-do
-clear
-echo "==========================="
-echo "        FTP MANAGER"
-echo "==========================="
-echo "1) Instalar servidor FTP"
-echo "2) Crear usuario FTP"
-echo "3) Eliminar usuario FTP"
-echo "4) Listar usuarios FTP"
-echo "5) Estado del servicio"
-echo "6) Reiniciar servicio"
-echo "0) Salir"
-echo ""
+while true; do
+    echo "===== Automatizacion y Gestion de FTP ====="
+    echo "1.- Instalar"
+    echo "2.- Verificar Servicio"
+    echo "3.- Configurar"
+    echo "4.- Crear Usuario"
+    echo "5.- Cambiar de grupo a usuario"
+    echo "6.- Salir"
+    read -p "Selecciona una opción: " opcion
 
-read -p "Selecciona: " op
-
-case $op in
-
-1) InstalarFTP ;;
-2) CrearUsuario ;;
-3) EliminarUsuario ;;
-4) ListarUsuarios ;;
-5) EstadoServicio ;;
-6) ReiniciarServicio ;;
-0) exit ;;
-*) echo "Opcion invalida"; sleep 2 ;;
-
-esac
-
+    case $opcion in
+        1) InstalarPaquete "vsftpd" ;;
+        2) VerificarPaquete "vsftpd" ;;
+        3)
+            CrearGrupos
+            CrearEstructuras
+            ;;
+        4) CrearUsuario ;;
+        5) CambiarGrupoUsuario ;;
+        6) break ;;
+        *) echo "Opción inválida" ;;
+    esac
+    echo ""
 done

@@ -1,146 +1,103 @@
 #!/bin/bash
 
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+source ./FunGENERALES.sh
+
 FTP_ROOT="/srv/ftp"
-LOCAL_USER="$FTP_ROOT/LocalUser"
-PUBLICA="$FTP_ROOT/publica"
-
+GENERAL="$FTP_ROOT/general"
 GRUPOS=("reprobados" "recursadores")
-
-InstalarFTP(){
-
-apt update
-apt install vsftpd acl -y
-
-mkdir -p $FTP_ROOT
-mkdir -p $LOCAL_USER
-mkdir -p $PUBLICA
-
-chmod 755 $FTP_ROOT
-chmod 755 $LOCAL_USER
-chmod 777 $PUBLICA
-
-CrearGrupos
-ConfigurarVSFTPD
-
-systemctl restart vsftpd
-
-echo "Servidor FTP instalado"
-read
-}
+FTP_USERS_GROUP="ftpusers"
 
 CrearGrupos(){
+    # Grupo global de FTP
+    groupadd $FTP_USERS_GROUP 2>/dev/null
 
-for g in "${GRUPOS[@]}"
-do
-groupadd $g 2>/dev/null
+    # Carpeta general
+    mkdir -p $GENERAL
+    chown root:$FTP_USERS_GROUP $GENERAL
+    chmod 2775 $GENERAL   # lectura/escritura para todos los usuarios
 
-mkdir -p $FTP_ROOT/$g
-chown root:$g $FTP_ROOT/$g
-chmod 770 $FTP_ROOT/$g
+    # Carpetas de grupo
+    for grupo in "${GRUPOS[@]}"; do
+        if ! getent group "$grupo" > /dev/null; then
+            groupadd "$grupo"
+            echo "Grupo $grupo creado."
+        else
+            echo "Grupo $grupo ya existe."
+        fi
 
-done
+        mkdir -p $FTP_ROOT/$grupo
+        chown root:$grupo $FTP_ROOT/$grupo
+        chmod 2770 $FTP_ROOT/$grupo
+    done
 }
 
-ConfigurarVSFTPD(){
+CrearEstructuras(){
 
 cat > /etc/vsftpd.conf <<EOF
 listen=YES
-
 anonymous_enable=YES
-anon_root=$PUBLICA
+anon_root=$GENERAL
 anon_upload_enable=NO
-
+anon_mkdir_write_enable=NO
 local_enable=YES
 write_enable=YES
-
 local_umask=002
-
-chroot_local_user=YES
-allow_writeable_chroot=YES
-
-user_sub_token=\$USER
-local_root=$LOCAL_USER/\$USER
-
-pasv_enable=YES
-pasv_min_port=40000
-pasv_max_port=40100
-
-xferlog_enable=YES
+dirmessage_enable=YES
+use_localtime=YES
+pam_service_name=vsftpd
+chroot_local_user=NO
 EOF
 
+    chmod 755 $FTP_ROOT
+
+    systemctl restart vsftpd
+    if systemctl is-active --quiet vsftpd; then
+        echo "vsftpd configurado correctamente."
+    else
+        echo "ERROR: vsftpd no inició"
+    fi
 }
 
 CrearUsuario(){
+    read -p "¿Cuántos usuarios deseas crear? " n
 
-read -p "Usuario: " usuario
+    for ((i=1;i<=n;i++))
+    do
+        read -p "Nombre del usuario: " usuario
+        read -s -p "Contraseña: " pass
+        echo ""
+        read -p "Grupo (reprobados/recursadores): " grupo
 
-echo "Selecciona grupo"
-echo "1) reprobados"
-echo "2) recursadores"
-read g
+        if ! id "$usuario" &>/dev/null; then
+            # Carpeta personal directamente en FTP_ROOT
+            mkdir -p $FTP_ROOT/$usuario
+            chown "$usuario:$grupo" $FTP_ROOT/$usuario
+            chmod 700 $FTP_ROOT/$usuario   # solo el dueño puede acceder
 
-if [ "$g" == "1" ]; then
-grupo="reprobados"
-else
-grupo="recursadores"
-fi
+            # Crear usuario con home en su carpeta personal
+            useradd -d $FTP_ROOT/$usuario -s /bin/bash -g "$grupo" "$usuario"
+            echo "$usuario:$pass" | chpasswd
+            usermod -aG $FTP_USERS_GROUP "$usuario"
 
-useradd -m -d $LOCAL_USER/$usuario -s /usr/sbin/nologin -g $grupo $usuario
-passwd $usuario
-
-mkdir -p $LOCAL_USER/$usuario/$usuario
-mkdir -p $LOCAL_USER/$usuario/$grupo
-mkdir -p $LOCAL_USER/$usuario/publica
-
-chmod 755 $LOCAL_USER/$usuario
-
-chown $usuario:$grupo $LOCAL_USER/$usuario/$usuario
-chmod 700 $LOCAL_USER/$usuario/$usuario
-
-setfacl -m g:$grupo:rwx $LOCAL_USER/$usuario/$grupo
-setfacl -m u:$usuario:rwx $LOCAL_USER/$usuario/$grupo
-
-setfacl -m u:$usuario:rwx $LOCAL_USER/$usuario/publica
-setfacl -m g:$grupo:rwx $LOCAL_USER/$usuario/publica
-
-mount --bind $FTP_ROOT/$grupo $LOCAL_USER/$usuario/$grupo
-mount --bind $PUBLICA $LOCAL_USER/$usuario/publica
-
-echo ""
-echo "Usuario creado correctamente"
-read
+            echo "Usuario $usuario creado."
+        else
+            echo "Usuario ya existe."
+        fi
+    done
 }
 
-EliminarUsuario(){
+CambiarGrupoUsuario() {
+    read -p "Usuario a cambiar: " usuario
+    read -p "Nuevo grupo (reprobados/recursadores): " nuevoGrupo
 
-read -p "Usuario a eliminar: " usuario
-
-userdel -r $usuario
-
-rm -rf $LOCAL_USER/$usuario
-
-echo "Usuario eliminado"
-read
-}
-
-ListarUsuarios(){
-
-ls $LOCAL_USER
-
-read
-}
-
-EstadoServicio(){
-
-systemctl status vsftpd
-
-read
-}
-
-ReiniciarServicio(){
-
-systemctl restart vsftpd
-
-echo "Servicio reiniciado"
-read
+    if id "$usuario" &>/dev/null; then
+        usermod -g "$nuevoGrupo" "$usuario"
+        chown "$usuario:$nuevoGrupo" $FTP_ROOT/$usuario
+        chmod 700 $FTP_ROOT/$usuario
+        echo "Grupo cambiado correctamente."
+    else
+        echo "El usuario no existe."
+    fi
 }
